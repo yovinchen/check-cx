@@ -15,6 +15,7 @@ import {
   getLastPingStartedAt,
   setLastPingStartedAt,
 } from "./global-state";
+import { startOfficialStatusPoller } from "./official-status-poller";
 import type { HealthStatus } from "../types";
 
 const POLL_INTERVAL_MS = getPollingIntervalMs();
@@ -120,4 +121,7 @@ if (!getPollerTimer()) {
     tick().catch((error) => console.error("[check-cx] 定时检测失败", error));
   }, POLL_INTERVAL_MS);
   setPollerTimer(timer);
+
+  // 启动官方状态轮询器
+  startOfficialStatusPoller();
 }

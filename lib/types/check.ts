@@ -3,6 +3,7 @@
  */
 
 import type { ProviderType } from "./provider";
+import type { OfficialStatusResult } from "./official-status";
 
 /**
  * Provider 健康状态
@@ -23,4 +24,5 @@ export interface CheckResult {
   pingLatencyMs: number | null; // 端点 Ping 延迟
   checkedAt: string; // ISO 8601 timestamp
   message: string;
+  officialStatus?: OfficialStatusResult; // 官方服务状态(可选)
 }

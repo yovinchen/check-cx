@@ -1,4 +1,4 @@
-import type { HealthStatus, ProviderType } from "../types";
+import type { HealthStatus, ProviderType, OfficialHealthStatus } from "../types";
 
 export const STATUS_META: Record<
   HealthStatus,
@@ -26,6 +26,36 @@ export const STATUS_META: Record<
     description: "请求失败或超时",
     badge: "danger",
     dot: "bg-rose-500",
+  },
+};
+
+export const OFFICIAL_STATUS_META: Record<
+  OfficialHealthStatus,
+  {
+    label: string;
+    description: string;
+    color: string; // Tailwind 文本颜色类
+  }
+> = {
+  operational: {
+    label: "正常",
+    description: "官方服务正常运行",
+    color: "text-emerald-600",
+  },
+  degraded: {
+    label: "降级",
+    description: "官方服务性能降级",
+    color: "text-amber-600",
+  },
+  down: {
+    label: "故障",
+    description: "官方服务出现故障",
+    color: "text-rose-600",
+  },
+  unknown: {
+    label: "未知",
+    description: "无法获取官方状态",
+    color: "text-gray-500",
   },
 };
 

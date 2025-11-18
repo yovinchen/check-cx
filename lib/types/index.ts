@@ -13,6 +13,9 @@ export { DEFAULT_ENDPOINTS } from "./provider";
 // 检查结果类型
 export type { HealthStatus, CheckResult } from "./check";
 
+// 官方状态类型
+export type { OfficialHealthStatus, OfficialStatusResult } from "./official-status";
+
 // Dashboard 类型
 export type {
   TimelineItem,

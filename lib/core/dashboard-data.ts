@@ -7,6 +7,7 @@ import { runProviderChecks } from "../providers";
 import { appendHistory, loadHistory } from "../database/history";
 import { getPollingIntervalLabel, getPollingIntervalMs } from "./polling-config";
 import { getPingCacheEntry } from "./global-state";
+import { getOfficialStatus } from "./official-status-poller";
 import type {
   ProviderTimeline,
   DashboardData,
@@ -100,10 +101,17 @@ export async function loadDashboardData(options?: {
         return null;
       }
 
+      // 附加官方状态到最新的 CheckResult
+      const latest = { ...sorted[0] };
+      const officialStatus = getOfficialStatus(latest.type);
+      if (officialStatus) {
+        latest.officialStatus = officialStatus;
+      }
+
       return {
         id,
         items: sorted,
-        latest: sorted[0],
+        latest,
       };
     }
   );

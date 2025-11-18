@@ -7,7 +7,7 @@ import { StatusTimeline } from "@/components/status-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { DashboardData } from "@/lib/types";
-import { PROVIDER_LABEL, STATUS_META } from "@/lib/core/status";
+import { PROVIDER_LABEL, STATUS_META, OFFICIAL_STATUS_META } from "@/lib/core/status";
 import { formatLocalTime } from "@/lib/utils";
 
 interface DashboardViewProps {
@@ -207,6 +207,23 @@ export function DashboardView({ initialData }: DashboardViewProps) {
                       </p>
                       <p className="mt-1 text-foreground">
                         {formatLatency(latest.pingLatencyMs)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                        官方状态
+                      </p>
+                      <p className="mt-1 text-foreground">
+                        {latest.officialStatus ? (
+                          <span
+                            className={OFFICIAL_STATUS_META[latest.officialStatus.status].color}
+                            title={latest.officialStatus.message}
+                          >
+                            {OFFICIAL_STATUS_META[latest.officialStatus.status].label}
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">—</span>
+                        )}
                       </p>
                     </div>
                     <div>
