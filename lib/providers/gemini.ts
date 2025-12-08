@@ -128,11 +128,17 @@ export async function checkGemini(
       signal: controller.signal,
     });
 
-    // 读取流式响应
-    for await (const chunk of stream) {
-      // 仅保证流可读，不需要组装完整内容
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      chunk.choices?.[0]?.delta?.content;
+    // 只需读取第一个 chunk 即可确认服务可用（测量首字延迟）
+    const iterator = stream[Symbol.asyncIterator]();
+    const { done } = await iterator.next();
+    if (!done) {
+      // 主动结束流，避免无意义的长时间占用
+      if (typeof (iterator as AsyncIterator<unknown> & { return?: () => void })
+        .return === "function") {
+        await (
+          iterator as AsyncIterator<unknown> & { return?: () => void }
+        ).return?.();
+      }
     }
 
     const latencyMs = Date.now() - startedAt;
