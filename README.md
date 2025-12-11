@@ -58,14 +58,17 @@ Check CX 是一套基于 **Next.js 16** + **shadcn/ui** 构建的现代化 AI �
 
 ### ⏱️ 可靠的健康检查
 
-- 基于流式 API 的快速检测(接收首个 chunk 即判定成功)
+- 基于 Vercel AI SDK 的统一检测逻辑
+- **数学挑战验证**：发送随机数学问题，验证回复正确性，防止假站点绕过
 - 可配置检测间隔(15-600 秒)
-- 并发执行多个检测任务
-- 自动超时控制(默认 15 秒)
+- 支持检测并发数控制(默认 5 并发)
+- 自动超时控制(默认 45 秒)
 - 智能状态判定:
-  - `operational`: 延迟 ≤ 6s
-  - `degraded`: 延迟 > 6s
+  - `operational`: 延迟 ≤ 6s 且验证通过
+  - `degraded`: 延迟 > 6s 但验证通过
+  - `validation_failed`: 收到回复但答案验证失败
   - `failed`: 请求失败或超时
+  - `error`: 请求过程中发生异常
 
 ### 📈 直观的数据展示
 
@@ -145,9 +148,12 @@ Check CX 是一套基于 **Next.js 16** + **shadcn/ui** 构建的现代化 AI �
    # Supabase 配置
    NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY=your-anon-key
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
    # 检测间隔(秒),范围 15-600,默认 60
    CHECK_POLL_INTERVAL_SECONDS=60
+   # 检测并发数,范围 1-20,默认 5
+   CHECK_CONCURRENCY=5
    ```
 
 4. **初始化数据库**
@@ -246,7 +252,7 @@ Check CX 使用 Supabase 的两张核心表:
 |------|------|------|
 | `id` | UUID | 主键,自动生成 |
 | `config_id` | UUID | 关联的配置 ID |
-| `status` | TEXT | 状态: `operational` / `degraded` / `failed` / `validation_failed` |
+| `status` | TEXT | 状态: `operational` / `degraded` / `failed` / `validation_failed` / `error` |
 | `latency_ms` | INTEGER | 响应延迟(毫秒) |
 | `ping_latency_ms` | INTEGER | 端点 Ping 延迟(毫秒) |
 | `checked_at` | TIMESTAMPTZ | 检测时间 |
@@ -541,26 +547,27 @@ check-cx/
 │   ├── core/                    # 核心模块
 │   │   ├── poller.ts           # 后台轮询器
 │   │   ├── global-state.ts     # 全局状态管理
-│   │   ├── health-snapshot-service.ts # 健康快照服务(统一读取/刷新/缓存)
+│   │   ├── health-snapshot-service.ts # 健康快照服务
 │   │   ├── dashboard-data.ts   # Dashboard 数据聚合
 │   │   ├── group-data.ts       # 分组数据加载
+│   │   ├── official-status-poller.ts # 官方状态轮询
 │   │   └── polling-config.ts   # 轮询配置
 │   ├── providers/               # Provider 检查实现
+│   │   ├── index.ts            # 统一入口(并发控制、重试逻辑)
+│   │   ├── ai-sdk-check.ts     # 基于 Vercel AI SDK 的统一检查器
+│   │   ├── challenge.ts        # 数学挑战生成与验证
+│   │   └── endpoint-ping.ts    # 端点 Ping 延迟测量
+│   ├── official-status/         # 官方状态页抓取
 │   │   ├── index.ts            # 统一入口
-│   │   ├── openai.ts           # OpenAI 检查器
-│   │   ├── gemini.ts           # Gemini 检查器
-│   │   ├── anthropic.ts        # Anthropic 检查器
-│   │   └── stream-check.ts     # 流式检查通用逻辑
+│   │   ├── openai.ts           # OpenAI 官方状态
+│   │   └── anthropic.ts        # Anthropic 官方状态
 │   ├── database/                # 数据库操作
 │   │   ├── config-loader.ts    # 配置加载
 │   │   ├── history.ts          # 历史记录管理
+│   │   ├── group-info.ts       # 分组信息管理
 │   │   └── notifications.ts    # 系统通知管理
 │   ├── types/                   # TypeScript 类型定义
-│   │   └── constants.ts         # 全局常量
 │   ├── utils/                   # 工具函数
-│   │   ├── client-cache.ts      # 客户端缓存管理器
-│   │   ├── cache-key.ts         # 缓存键序列化
-│   │   └── error-handler.ts     # 错误处理与脱敏
 │   └── supabase/                # Supabase 客户端
 ├── supabase/
 │   └── migrations/              # 数据库迁移脚本
@@ -591,8 +598,8 @@ providers/ → check_history → group-dashboard-view.tsx (分组页)
 
 2. **健康检查**
    - `lib/providers/index.ts` 并发执行所有启用的配置
-   - 每个 provider 使用流式 API 进行快速检测
-   - 接收到首个响应 chunk 即判定为成功
+   - 使用 Vercel AI SDK (`lib/providers/ai-sdk-check.ts`) 统一处理所有 Provider
+   - 发送数学挑战问题并验证回复，确保模型真实可用
 
 3. **数据存储与裁剪**
    - `lib/database/history.ts` 通过 RPC `get_recent_check_history`/`prune_check_history` 写入并裁剪历史
@@ -631,14 +638,16 @@ pnpm db:types         # 生成 Supabase 类型定义
 |--------|------|--------|------|
 | `NEXT_PUBLIC_SUPABASE_URL` | ✅ | - | Supabase 项目 URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY` | ✅ | - | Supabase 公开密钥 |
+| `SUPABASE_SERVICE_ROLE_KEY` | ❌ | - | Supabase Service Role Key (服务端使用,绕过 RLS) |
 | `CHECK_POLL_INTERVAL_SECONDS` | ❌ | 60 | 检测间隔(秒),范围 15-600 |
+| `CHECK_CONCURRENCY` | ❌ | 5 | 检测并发数,范围 1-20 |
+| `OFFICIAL_STATUS_CHECK_INTERVAL_SECONDS` | ❌ | 300 | 官方状态检查间隔(秒),范围 60-3600 |
 
 ## 文档
 
 - [**架构文档**](docs/ARCHITECTURE.md) - 系统架构与模块设计
 - [**运维手册**](docs/OPERATIONS.md) - 部署、监控与故障排查
 - [**扩展指南**](docs/EXTENDING_PROVIDERS.md) - 添加新 Provider 的开发指南
-- [**Schema 文档**](docs/DATABASE_SCHEMA.md) - 数据库表结构详解
 
 ## 常见问题
 
@@ -650,28 +659,28 @@ pnpm db:types         # 生成 Supabase 类型定义
 
 配置会在下一次轮询时自动加载,无需重启服务。检查配置的 `enabled` 字段是否为 `true`。
 
-### 3. 如何调整检测超时时间?
+### 如何调整检测超时时间?
 
-在 `lib/providers/stream-check.ts` 中修改 `DEFAULT_TIMEOUT_MS` 常量(默认 15000ms)。
+在 `lib/providers/ai-sdk-check.ts` 中修改 `DEFAULT_TIMEOUT_MS` 常量(默认 45000ms)。
 
-### 4. 如何添加自定义 Provider?
+### 如何添加自定义 Provider?
 
-参考 [扩展指南](docs/EXTENDING_PROVIDERS.md) 了解详细步骤。
+当前版本基于 Vercel AI SDK 统一实现，支持 OpenAI、Anthropic、Gemini 三种 Provider 类型。如需添加新类型，需要修改 `lib/providers/ai-sdk-check.ts` 中的 `createModel` 函数。
 
-### 5. 历史数据能保存多久?
+### 历史数据能保存多久?
 
 每个配置最多保留 60 条历史记录。如需更长时间保存,可以修改 `lib/database/history.ts` 中的 `MAX_HISTORY_PER_CONFIG` 常量。
 
-### 6. 如何使用分组功能?
+### 如何使用分组功能?
 
 在 `check_configs` 表中设置 `group_name` 字段即可。相同 `group_name` 的配置会自动归为一组,在首页以折叠面板形式展示。点击分组标题可进入分组详情页。
 
-### 7. 维护模式和禁用有什么区别?
+### 维护模式和禁用有什么区别?
 
 - **禁用** (`enabled = false`): 配置完全不执行,不显示在 Dashboard 中
 - **维护模式** (`is_maintenance = true`): 配置仍显示在 Dashboard 中,但显示为"维护中"状态,不执行实际检测
 
-### 8. 如何发布系统通知?
+### 如何发布系统通知?
 
 在 `system_notifications` 表中插入记录即可。支持三种级别(`info`/`warning`/`error`)和 Markdown 格式。多条活跃通知会自动轮播。
 
@@ -753,19 +762,21 @@ curl https://your-domain.com/api/v1/status?group=主力服务商&model=gpt-4o
 
 | 状态 | 说明 |
 |------|------|
-| `operational` | 正常运行,延迟 ≤ 6s |
-| `degraded` | 响应缓慢,延迟 > 6s |
+| `operational` | 正常运行,延迟 ≤ 6s 且验证通过 |
+| `degraded` | 响应缓慢,延迟 > 6s 但验证通过 |
+| `validation_failed` | 收到回复但答案验证失败 |
 | `failed` | 请求失败或超时 |
-| `validation_failed` | 响应验证失败 |
+| `error` | 请求过程中发生异常 |
 | `maintenance` | 维护模式中 |
 
 ## 技术栈
 
 - **框架**: Next.js 16 (App Router)
 - **UI**: React 19, shadcn/ui, Tailwind CSS
+- **AI SDK**: Vercel AI SDK (统一处理 OpenAI/Anthropic/Gemini)
 - **数据库**: Supabase (PostgreSQL)
 - **类型**: TypeScript 5.x
-- **工具**: pnpm, ESLint, Prettier
+- **工具**: pnpm, ESLint
 
 ## 贡献指南
 
