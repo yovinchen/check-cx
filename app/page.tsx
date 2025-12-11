@@ -16,12 +16,18 @@ export default async function Home() {
         <DashboardView initialData={data} />
       </main>
       
-      <footer className="mt-16 py-6 text-center">
-         <div className="inline-flex items-center gap-2 rounded-full border border-border/40 bg-background/60 px-4 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur-sm transition hover:border-border/80 hover:text-foreground">
-          <span className="font-medium uppercase tracking-wider opacity-70">
-            Version
-          </span>
-          <span className="font-mono text-current">{ESTIMATED_VERSION}</span>
+      <footer className="mt-16 border-t border-border/40">
+        <div className="mx-auto flex w-full max-w-[1600px] flex-col items-center justify-between gap-4 px-3 py-6 sm:flex-row sm:px-6 lg:px-12">
+          <div className="text-sm text-muted-foreground">
+            © {new Date().getFullYear()} Check CX. All rights reserved.
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border/40 bg-background/60 px-3 py-1 text-xs text-muted-foreground shadow-sm transition hover:border-border/80 hover:text-foreground">
+              <span className="font-medium opacity-70">Ver.</span>
+              <span className="font-mono">{ESTIMATED_VERSION}</span>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
