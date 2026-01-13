@@ -14,6 +14,7 @@ import {
 interface HistoryTrendChartProps {
   data?: TrendDataPoint[] | null;
   period: AvailabilityPeriod;
+  isMaintenance?: boolean;
 }
 
 const PERIOD_LABELS: Record<AvailabilityPeriod, string> = {
@@ -76,7 +77,7 @@ function CustomTooltip({
   );
 }
 
-export function HistoryTrendChart({ data, period }: HistoryTrendChartProps) {
+export function HistoryTrendChart({ data, period, isMaintenance }: HistoryTrendChartProps) {
   const points = useMemo(() => (data ? [...data] : []), [data]);
 
   const { minLatency, maxLatency, avgLatency } = useMemo(() => {
@@ -105,6 +106,13 @@ export function HistoryTrendChart({ data, period }: HistoryTrendChartProps) {
   }, [points, minLatency]);
 
   if (!points.length) {
+    if (isMaintenance) {
+      return (
+        <div className="rounded-lg border border-dashed border-blue-500/30 bg-blue-500/5 px-3 py-3 text-xs text-blue-500">
+          维护中 · 已暂停 {PERIOD_LABELS[period]} 延迟趋势采集
+        </div>
+      );
+    }
     return (
       <div className="rounded-lg border border-dashed border-border/50 bg-muted/10 px-3 py-3 text-xs text-muted-foreground">
         暂无 {PERIOD_LABELS[period]} 趋势数据
@@ -117,11 +125,21 @@ export function HistoryTrendChart({ data, period }: HistoryTrendChartProps) {
     maxLatency + (maxLatency - minLatency) * 0.1,
   ];
 
+  // 维护模式下用蓝色样式包装
+  const wrapperClass = isMaintenance
+    ? "space-y-2 rounded-lg border border-dashed border-blue-500/30 bg-blue-500/5 p-2"
+    : "space-y-2";
+  const titleClass = isMaintenance
+    ? "text-[10px] font-semibold uppercase tracking-wider text-blue-500"
+    : "text-[10px] font-semibold uppercase tracking-wider text-muted-foreground";
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        <span>延迟趋势 ({PERIOD_LABELS[period]})</span>
-        <span className="font-mono text-[10px]">
+    <div className={wrapperClass}>
+      <div className={`flex items-center justify-between ${titleClass}`}>
+        <span>
+          {isMaintenance ? "维护前延迟趋势" : "延迟趋势"} ({PERIOD_LABELS[period]})
+        </span>
+        <span className={`font-mono text-[10px] ${isMaintenance ? "text-blue-500/70" : ""}`}>
           {minLatency.toFixed(0)}-{maxLatency.toFixed(0)} ms
         </span>
       </div>

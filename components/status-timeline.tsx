@@ -13,6 +13,8 @@ interface StatusTimelineProps {
   items: TimelineItem[];
   /** 距离下一次轮询刷新的剩余毫秒数，用于展示倒计时徽标 */
   nextRefreshInMs?: number | null;
+  /** 是否处于维护模式 */
+  isMaintenance?: boolean;
 }
 
 /** 时间线最多绘制的片段数量 */
@@ -31,7 +33,7 @@ const formatRemainingTime = (ms: number) => {
 const formatLatency = (value: number | null | undefined) =>
   typeof value === "number" ? `${value} ms` : "—";
 
-export function StatusTimeline({ items, nextRefreshInMs }: StatusTimelineProps) {
+export function StatusTimeline({ items, nextRefreshInMs, isMaintenance }: StatusTimelineProps) {
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const [activeSegmentKey, setActiveSegmentKey] = useState<string | null>(null);
 
@@ -59,6 +61,13 @@ export function StatusTimeline({ items, nextRefreshInMs }: StatusTimelineProps) 
   }, []);
 
   if (items.length === 0) {
+    if (isMaintenance) {
+      return (
+        <div className="flex items-center justify-center rounded-lg border border-dashed border-blue-500/30 bg-blue-500/5 p-4 text-xs text-blue-500">
+          维护中 · 已暂停时间线采集
+        </div>
+      );
+    }
     return (
       <div className="flex items-center justify-center rounded-lg border border-dashed border-border/50 bg-muted/10 p-4 text-xs text-muted-foreground">
         NO DATA AVAILABLE

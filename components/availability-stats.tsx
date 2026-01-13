@@ -6,6 +6,7 @@ import {cn} from "@/lib/utils";
 interface AvailabilityStatsProps {
   stats?: AvailabilityStat[] | null;
   period: AvailabilityPeriod;
+  isMaintenance?: boolean;
 }
 
 const PERIOD_LABELS: Record<AvailabilityPeriod, string> = {
@@ -27,10 +28,31 @@ function getAvailabilityColor(pct: number | null | undefined) {
   return "text-red-500";
 }
 
-export function AvailabilityStats({ stats, period }: AvailabilityStatsProps) {
+export function AvailabilityStats({ stats, period, isMaintenance }: AvailabilityStatsProps) {
   const current = stats?.find((item) => item.period === period);
   const pct = current?.availabilityPct ?? null;
   const pctLabel = pct === null ? "—" : `${pct.toFixed(2)}%`;
+
+  // 维护模式下的特殊展示
+  if (isMaintenance) {
+    return (
+      <div className="flex items-center justify-between rounded-lg border border-dashed border-blue-500/30 bg-blue-500/5 px-3 py-2">
+        <div className="space-y-1">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500">
+            可用性 ({PERIOD_LABELS[period]})
+          </p>
+          <p className="text-[10px] text-blue-500/70">
+            {current
+              ? `维护前 ${current.operationalCount}/${current.totalChecks} 成功`
+              : "维护中 · 已暂停统计"}
+          </p>
+        </div>
+        <span className="font-mono text-sm font-bold text-blue-500">
+          {pctLabel}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">

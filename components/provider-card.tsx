@@ -52,6 +52,7 @@ export function ProviderCard({
 }: ProviderCardProps) {
   const { id, latest, items } = timeline;
   const preset = STATUS_META[latest.status];
+  const isMaintenance = latest.status === "maintenance";
   const officialStatus = latest.officialStatus;
   const officialStatusMeta = officialStatus
     ? OFFICIAL_STATUS_META[officialStatus.status]
@@ -184,15 +185,15 @@ export function ProviderCard({
             )}
           </div>
 
-          <AvailabilityStats stats={availabilityStats} period={selectedPeriod} />
+          <AvailabilityStats stats={availabilityStats} period={selectedPeriod} isMaintenance={isMaintenance} />
         </div>
       </div>
 
       {/* Timeline Section - Visual separation */}
       <div className="border-t border-border/40 bg-muted/10 px-5 py-4">
-        <StatusTimeline items={items} nextRefreshInMs={timeToNextRefresh} />
+        <StatusTimeline items={items} nextRefreshInMs={timeToNextRefresh} isMaintenance={isMaintenance} />
         <div className="mt-4">
-          <HistoryTrendChart data={trendData} period={selectedPeriod} />
+          <HistoryTrendChart data={trendData} period={selectedPeriod} isMaintenance={isMaintenance} />
         </div>
       </div>
     </div>
