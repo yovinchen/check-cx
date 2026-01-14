@@ -40,12 +40,126 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
+// 最大显示数据点数量，超过此值将进行采样
+const MAX_VISIBLE_DOTS = 60;
+
+interface SampledDataPoint extends TrendDataPoint {
+  index: number;
+  fill: string;
+  displayLatency: number;
+  isKeyPoint: boolean; // 是否为关键点（状态变化、极值）
+}
+
+/**
+ * 智能数据采样：保留关键点（首尾、状态变化、极值），等间隔采样其余点
+ */
+function sampleDataPoints(
+  points: TrendDataPoint[],
+  maxPoints: number
+): { sampledPoints: TrendDataPoint[]; keyPointIndices: Set<number> } {
+  if (points.length <= maxPoints) {
+    // 不需要采样，标记所有状态变化点和极值点为关键点
+    const keyPointIndices = new Set<number>();
+    let minLatency = Infinity;
+    let maxLatency = -Infinity;
+    let minIdx = 0;
+    let maxIdx = 0;
+
+    points.forEach((p, i) => {
+      if (typeof p.latencyMs === "number") {
+        if (p.latencyMs < minLatency) {
+          minLatency = p.latencyMs;
+          minIdx = i;
+        }
+        if (p.latencyMs > maxLatency) {
+          maxLatency = p.latencyMs;
+          maxIdx = i;
+        }
+      }
+      // 状态变化点
+      if (i > 0 && points[i - 1].status !== p.status) {
+        keyPointIndices.add(i);
+        keyPointIndices.add(i - 1);
+      }
+    });
+
+    // 首尾点和极值点
+    keyPointIndices.add(0);
+    keyPointIndices.add(points.length - 1);
+    keyPointIndices.add(minIdx);
+    keyPointIndices.add(maxIdx);
+
+    return { sampledPoints: points, keyPointIndices };
+  }
+
+  // 需要采样
+  const keyPointIndices = new Set<number>();
+  const mustInclude = new Set<number>();
+
+  // 1. 标记必须包含的点：首尾
+  mustInclude.add(0);
+  mustInclude.add(points.length - 1);
+
+  // 2. 标记状态变化点
+  for (let i = 1; i < points.length; i++) {
+    if (points[i - 1].status !== points[i].status) {
+      mustInclude.add(i - 1);
+      mustInclude.add(i);
+    }
+  }
+
+  // 3. 标记极值点
+  let minLatency = Infinity;
+  let maxLatency = -Infinity;
+  let minIdx = 0;
+  let maxIdx = 0;
+  points.forEach((p, i) => {
+    if (typeof p.latencyMs === "number") {
+      if (p.latencyMs < minLatency) {
+        minLatency = p.latencyMs;
+        minIdx = i;
+      }
+      if (p.latencyMs > maxLatency) {
+        maxLatency = p.latencyMs;
+        maxIdx = i;
+      }
+    }
+  });
+  mustInclude.add(minIdx);
+  mustInclude.add(maxIdx);
+
+  // 4. 计算采样间隔，填充剩余点
+  const remainingSlots = maxPoints - mustInclude.size;
+  const selectedIndices = new Set(mustInclude);
+
+  if (remainingSlots > 0) {
+    const step = points.length / remainingSlots;
+    for (let i = 0; i < remainingSlots; i++) {
+      const idx = Math.min(Math.floor(i * step), points.length - 1);
+      selectedIndices.add(idx);
+    }
+  }
+
+  // 5. 按原顺序排列采样点
+  const sortedIndices = Array.from(selectedIndices).sort((a, b) => a - b);
+  const sampledPoints = sortedIndices.map((i) => points[i]);
+
+  // 6. 标记采样后的关键点索引
+  sortedIndices.forEach((originalIdx, newIdx) => {
+    if (mustInclude.has(originalIdx)) {
+      keyPointIndices.add(newIdx);
+    }
+  });
+
+  return { sampledPoints, keyPointIndices };
+}
+
 function CustomTooltip({
   active,
   payload,
 }: {
   active?: boolean;
-  payload?: Array<{ payload: TrendDataPoint }>;
+  payload?: Array<{ payload: SampledDataPoint }>;
 }) {
   if (!active || !payload?.length) {
     return null;
@@ -96,12 +210,14 @@ export function HistoryTrendChart({ data, period, isMaintenance }: HistoryTrendC
     return { minLatency: min, maxLatency: max, avgLatency: avg };
   }, [points]);
 
-  const chartData = useMemo(() => {
-    return points.map((point, index) => ({
+  const chartData = useMemo((): SampledDataPoint[] => {
+    const { sampledPoints, keyPointIndices } = sampleDataPoints(points, MAX_VISIBLE_DOTS);
+    return sampledPoints.map((point, index) => ({
       ...point,
       index,
       fill: STATUS_COLORS[point.status],
       displayLatency: point.latencyMs ?? minLatency,
+      isKeyPoint: keyPointIndices.has(index),
     }));
   }, [points, minLatency]);
 
@@ -170,16 +286,22 @@ export function HistoryTrendChart({ data, period, isMaintenance }: HistoryTrendC
             dataKey="displayLatency"
             stroke="var(--primary)"
             strokeWidth={1.5}
-            dot={({ cx, cy, payload }) => (
-              <circle
-                key={`dot-${payload.index}`}
-                cx={cx}
-                cy={cy}
-                r={3}
-                fill={payload.fill}
-                strokeWidth={0}
-              />
-            )}
+            dot={({ cx, cy, payload }) => {
+              // 只在关键点显示圆点
+              if (!payload.isKeyPoint) {
+                return <circle key={`dot-${payload.index}`} r={0} />;
+              }
+              return (
+                <circle
+                  key={`dot-${payload.index}`}
+                  cx={cx}
+                  cy={cy}
+                  r={3}
+                  fill={payload.fill}
+                  strokeWidth={0}
+                />
+              );
+            }}
             activeDot={{
               r: 5,
               strokeWidth: 2,
