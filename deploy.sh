@@ -4,8 +4,8 @@ set -e
 echo "=== 拉取最新代码 ==="
 git pull
 
-echo "=== 构建新镜像（不停机）==="
-docker compose build
+echo "=== 拉取最新镜像 ==="
+docker compose pull
 
 echo "=== 替换容器 ==="
 docker compose up -d --force-recreate --remove-orphans
