@@ -4,11 +4,11 @@
 
 import "server-only";
 
-import {createAdminClient} from "../supabase/admin";
-import {getPollingIntervalMs} from "../core/polling-config";
-import type {AvailabilityStats} from "../types/database";
-import type {AvailabilityStat, AvailabilityStatsMap} from "../types";
-import {logError} from "../utils";
+import { getDb } from "@/lib/db";
+import { getPollingIntervalMs } from "../core/polling-config";
+import type { AvailabilityStats } from "../types/database";
+import type { AvailabilityStat, AvailabilityStatsMap } from "../types";
+import { logError } from "../utils";
 
 interface AvailabilityCache {
   data: AvailabilityStatsMap;
@@ -106,9 +106,9 @@ export async function getAvailabilityStats(
   }
   metrics.misses += 1;
 
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("availability_stats")
+  const db = await getDb();
+  const { data, error } = await db
+    .from<AvailabilityStats>("availability_stats")
     .select("config_id, period, total_checks, operational_count, availability_pct")
     .order("config_id", { ascending: true })
     .order("period", { ascending: true });

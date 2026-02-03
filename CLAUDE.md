@@ -67,9 +67,10 @@ cp .env.example .env.local
 ```
 
 必需的环境变量：
-- `SUPABASE_URL` - Supabase 项目 URL
-- `SUPABASE_PUBLISHABLE_OR_ANON_KEY` - Supabase 公共访问 Key
-- `SUPABASE_SERVICE_ROLE_KEY` - Service Role Key（服务端使用，勿暴露）
+- `DATABASE_PROVIDER` - 数据库提供者（`postgres` 或 `supabase`，默认：`supabase`）
+- `DATABASE_URL` - PostgreSQL 连接字符串（`DATABASE_PROVIDER=postgres` 时必需）
+- `SUPABASE_URL` - Supabase 项目 URL（`DATABASE_PROVIDER=supabase` 时必需）
+- `SUPABASE_SERVICE_ROLE_KEY` - Service Role Key（`DATABASE_PROVIDER=supabase` 时必需）
 - `CHECK_NODE_ID` - 节点身份，用于多节点选主（默认：`local`）
 - `CHECK_POLL_INTERVAL_SECONDS` - 检测间隔（15–600 秒，默认：60）
 
@@ -93,6 +94,14 @@ lib/
 │   ├── gemini.ts      # Gemini 完整实现
 │   ├── anthropic.ts   # Anthropic 完整实现
 │   └── stream-check.ts # 流式检查通用逻辑
+├── db/                 # 数据库抽象层
+│   ├── index.ts       # 统一导出
+│   ├── types.ts       # 数据库操作类型定义
+│   ├── client.ts      # 连接工厂（根据环境变量选择适配器）
+│   └── adapters/
+│       ├── interface.ts   # DatabaseAdapter 接口
+│       ├── postgres.ts    # postgres.js 实现
+│       └── supabase.ts    # Supabase 实现
 ├── database/           # 数据库操作
 │   ├── config-loader.ts # 配置加载
 │   └── history.ts     # 历史记录管理
@@ -107,10 +116,8 @@ lib/
 │   ├── dashboard-data.ts # Dashboard 数据聚合
 │   ├── status.ts      # 状态元数据
 │   └── polling-config.ts # 轮询配置
-└── supabase/          # Supabase 客户端
-    ├── client.ts      # 浏览器端
-    ├── server.ts      # 服务器端
-    └── middleware.ts  # 会话中间件
+└── supabase/          # Supabase 客户端（仅 Supabase 适配器使用）
+    └── admin.ts       # 管理员客户端（绕过 RLS）
 ```
 
 ### 后台轮询系统
@@ -178,15 +185,18 @@ lib/
 5. **前端轮询**: `components/dashboard-view.tsx` 使用客户端定时器定期调用 `/api/dashboard` 获取最新数据
 6. **数据聚合**: `lib/core/dashboard-data.ts` 和 `lib/core/group-data.ts` 负责分组与统计数据
 
-### Supabase 集成
+### 数据库抽象层
 
-- **服务端**: `lib/supabase/server.ts` 提供服务器端客户端（支持 SSR 和 cookies）
-- **管理端**: `lib/supabase/admin.ts` 提供管理员客户端（绕过 RLS）
-- **中间件**: `lib/supabase/middleware.ts` 处理会话刷新
+项目使用适配器模式支持多种数据库后端：
+
+- **适配器接口**: `lib/db/types.ts` 定义了 `DatabaseAdapter` 接口，模拟 Supabase 风格的链式查询 API
+- **postgres.js 适配器**: `lib/db/adapters/postgres.ts` 使用 `postgres` 库连接标准 PostgreSQL
+- **Supabase 适配器**: `lib/db/adapters/supabase.ts` 包装现有的 `createAdminClient()`
+- **连接工厂**: `lib/db/client.ts` 根据 `DATABASE_PROVIDER` 环境变量选择适配器
 - **环境变量**:
-  - `SUPABASE_URL`: Supabase 项目 URL
-  - `SUPABASE_PUBLISHABLE_OR_ANON_KEY`: 公开/匿名 key
-  - `SUPABASE_SERVICE_ROLE_KEY`: Service Role key（管理员权限）
+  - `DATABASE_PROVIDER`: `postgres` 或 `supabase`（默认 `supabase`）
+  - `DATABASE_URL`: PostgreSQL 连接字符串（postgres 模式）
+  - `DATABASE_SCHEMA`: 数据库 schema（默认按 `NODE_ENV` 选择）
 
 ### 数据库表结构
 

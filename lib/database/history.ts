@@ -3,10 +3,9 @@
  */
 
 import "server-only";
-import type {PostgrestError} from "@supabase/supabase-js";
-import {createAdminClient} from "../supabase/admin";
-import type {CheckResult, HistorySnapshot} from "../types";
-import {logError} from "../utils";
+import { getDb, type DatabaseAdapter, type DbError } from "@/lib/db";
+import type { CheckResult, HistorySnapshot } from "../types";
+import { logError } from "../utils";
 
 /**
  * 每个 Provider 最多保留的历史记录数
@@ -27,8 +26,6 @@ export const HISTORY_RETENTION_DAYS = (() => {
 
 const RPC_RECENT_HISTORY = "get_recent_check_history";
 const RPC_PRUNE_HISTORY = "prune_check_history";
-
-type AdminClient = ReturnType<typeof createAdminClient>;
 
 export interface HistoryQueryOptions {
   allowedIds?: Iterable<string> | null;
@@ -59,9 +56,9 @@ class SnapshotStore {
       return {};
     }
 
-    const supabase = createAdminClient();
+    const db = await getDb();
     const limitPerConfig = options?.limitPerConfig ?? MAX_POINTS_PER_PROVIDER;
-    const { data, error } = await supabase.rpc(
+    const { data, error } = await db.rpc<RpcHistoryRow>(
       RPC_RECENT_HISTORY,
       {
         limit_per_config: limitPerConfig,
@@ -72,7 +69,7 @@ class SnapshotStore {
     if (error) {
       logError("获取历史快照失败", error);
       if (isMissingFunctionError(error)) {
-        return fallbackFetchSnapshot(supabase, normalizedIds);
+        return fallbackFetchSnapshot(db, normalizedIds);
       }
       return {};
     }
@@ -85,7 +82,7 @@ class SnapshotStore {
       return;
     }
 
-    const supabase = createAdminClient();
+    const db = await getDb();
     const records = results.map((result) => ({
       config_id: result.id,
       status: result.status,
@@ -95,32 +92,32 @@ class SnapshotStore {
       message: result.message,
     }));
 
-    const { error } = await supabase.from("check_history").insert(records);
+    const { error } = await db.from("check_history").insert(records);
     if (error) {
       logError("写入历史记录失败", error);
       return;
     }
 
-    await this.pruneInternal(supabase);
+    await this.pruneInternal(db);
   }
 
   async prune(retentionDays: number = HISTORY_RETENTION_DAYS): Promise<void> {
-    const supabase = createAdminClient();
-    await this.pruneInternal(supabase, retentionDays);
+    const db = await getDb();
+    await this.pruneInternal(db, retentionDays);
   }
 
   private async pruneInternal(
-    supabase: AdminClient,
+    db: DatabaseAdapter,
     retentionDays: number = HISTORY_RETENTION_DAYS
   ): Promise<void> {
-    const { error } = await supabase.rpc(RPC_PRUNE_HISTORY, {
+    const { error } = await db.rpc(RPC_PRUNE_HISTORY, {
       retention_days: retentionDays,
     });
 
     if (error) {
       logError("清理历史记录失败", error);
       if (isMissingFunctionError(error)) {
-        await fallbackPruneHistory(supabase, retentionDays);
+        await fallbackPruneHistory(db, retentionDays);
       }
     }
   }
@@ -198,7 +195,7 @@ function mapRowsToSnapshot(
   return history;
 }
 
-function isMissingFunctionError(error: PostgrestError | null): boolean {
+function isMissingFunctionError(error: DbError | null): boolean {
   if (!error?.message) {
     return false;
   }
@@ -209,31 +206,15 @@ function isMissingFunctionError(error: PostgrestError | null): boolean {
 }
 
 async function fallbackFetchSnapshot(
-  supabase: AdminClient,
+  db: DatabaseAdapter,
   allowedIds: string[] | null
 ): Promise<HistorySnapshot> {
   try {
-    let query = supabase
+    // Note: The fallback mode uses a simpler query without JOIN
+    // since the adapter's query builder doesn't support advanced JOIN syntax
+    let query = db
       .from("check_history")
-      .select(
-        `
-        id,
-        config_id,
-        status,
-        latency_ms,
-        ping_latency_ms,
-        checked_at,
-        message,
-        check_configs (
-          id,
-          name,
-          type,
-          model,
-          endpoint,
-          group_name
-        )
-      `
-      )
+      .select("id, config_id, status, latency_ms, ping_latency_ms, checked_at, message")
       .order("checked_at", { ascending: false });
 
     if (allowedIds) {
@@ -246,25 +227,53 @@ async function fallbackFetchSnapshot(
       return {};
     }
 
+    // Since we can't do JOIN, we need to fetch configs separately
+    const configIds = new Set<string>();
+    for (const record of data || []) {
+      if (record.config_id) {
+        configIds.add(record.config_id as string);
+      }
+    }
+
+    // Fetch all related configs
+    const configsQuery = db
+      .from("check_configs")
+      .select("id, name, type, model, endpoint, group_name");
+
+    if (configIds.size > 0) {
+      configsQuery.in("id", Array.from(configIds));
+    }
+
+    const { data: configsData } = await configsQuery;
+    const configsMap = new Map<string, { name: string; type: string; model: string; endpoint: string; group_name: string | null }>();
+    for (const config of configsData || []) {
+      configsMap.set(config.id as string, {
+        name: config.name as string,
+        type: config.type as string,
+        model: config.model as string,
+        endpoint: config.endpoint as string,
+        group_name: (config.group_name as string) ?? null,
+      });
+    }
+
     const history: HistorySnapshot = {};
     for (const record of data || []) {
-      const configs = record.check_configs;
-      if (!configs || !Array.isArray(configs) || configs.length === 0) {
+      const config = configsMap.get(record.config_id as string);
+      if (!config) {
         continue;
       }
-      const config = configs[0];
 
       const result: CheckResult = {
-        id: config.id,
+        id: record.config_id as string,
         name: config.name,
-        type: config.type,
+        type: config.type as CheckResult["type"],
         endpoint: config.endpoint,
         model: config.model,
         status: record.status as CheckResult["status"],
-        latencyMs: record.latency_ms,
-        pingLatencyMs: record.ping_latency_ms ?? null,
-        checkedAt: record.checked_at,
-        message: record.message ?? "",
+        latencyMs: record.latency_ms as number | null,
+        pingLatencyMs: (record.ping_latency_ms as number) ?? null,
+        checkedAt: record.checked_at as string,
+        message: (record.message as string) ?? "",
         groupName: config.group_name ?? null,
       };
 
@@ -291,7 +300,7 @@ async function fallbackFetchSnapshot(
 }
 
 async function fallbackPruneHistory(
-  supabase: AdminClient,
+  db: DatabaseAdapter,
   retentionDays: number
 ): Promise<void> {
   try {
@@ -303,7 +312,7 @@ async function fallbackPruneHistory(
       Date.now() - effectiveDays * 24 * 60 * 60 * 1000
     ).toISOString();
 
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await db
       .from("check_history")
       .delete()
       .lt("checked_at", cutoff);
@@ -315,4 +324,3 @@ async function fallbackPruneHistory(
     logError("fallback 模式下清理历史异常", error);
   }
 }
-

@@ -3,10 +3,10 @@
  */
 
 import "server-only";
-import {createAdminClient} from "../supabase/admin";
-import {getPollingIntervalMs} from "../core/polling-config";
-import type {CheckConfigRow, ProviderConfig, ProviderType} from "../types";
-import {logError} from "../utils";
+import { getDb } from "@/lib/db";
+import { getPollingIntervalMs } from "../core/polling-config";
+import type { CheckConfigRow, ProviderConfig, ProviderType } from "../types";
+import { logError } from "../utils";
 
 interface ConfigCache {
   data: ProviderConfig[];
@@ -53,9 +53,9 @@ export async function loadProviderConfigsFromDB(options?: {
     }
     metrics.misses += 1;
 
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("check_configs")
+    const db = await getDb();
+    const { data, error } = await db
+      .from<CheckConfigRow>("check_configs")
       .select("id, name, type, model, endpoint, api_key, is_maintenance, request_header, metadata, group_name")
       .eq("enabled", true)
       .order("id");

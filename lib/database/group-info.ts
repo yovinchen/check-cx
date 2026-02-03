@@ -1,5 +1,5 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getDb } from "@/lib/db";
 import { getPollingIntervalMs } from "@/lib/core/polling-config";
 import type { GroupInfoRow } from "@/lib/types/database";
 
@@ -46,10 +46,10 @@ export async function loadGroupInfos(options?: {
   }
   metrics.misses += 1;
 
-  const supabase = createAdminClient();
+  const db = await getDb();
 
-  const { data, error } = await supabase
-    .from("group_info")
+  const { data, error } = await db
+    .from<GroupInfoRow>("group_info")
     .select("*")
     .order("group_name", { ascending: true });
 

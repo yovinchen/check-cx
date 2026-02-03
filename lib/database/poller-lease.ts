@@ -3,22 +3,20 @@
  */
 
 import "server-only";
-import type {PostgrestError} from "@supabase/supabase-js";
-
-import {createAdminClient} from "../supabase/admin";
-import {logError} from "../utils";
+import { getDb, type DbError } from "@/lib/db";
+import { logError } from "../utils";
 
 const LEASE_TABLE = "check_poller_leases";
 const LEASE_KEY = "poller";
 const INITIAL_LEASE_EXPIRES_AT = new Date(0).toISOString();
 
-function isDuplicateKeyError(error: PostgrestError | null): boolean {
+function isDuplicateKeyError(error: DbError | null): boolean {
   return error?.code === "23505";
 }
 
 export async function ensurePollerLeaseRow(): Promise<void> {
-  const supabase = createAdminClient();
-  const { error } = await supabase.from(LEASE_TABLE).insert({
+  const db = await getDb();
+  const { error } = await db.from(LEASE_TABLE).insert({
     lease_key: LEASE_KEY,
     leader_id: null,
     lease_expires_at: INITIAL_LEASE_EXPIRES_AT,
@@ -34,9 +32,9 @@ export async function tryAcquirePollerLease(
   now: Date,
   expiresAt: Date
 ): Promise<boolean> {
-  const supabase = createAdminClient();
+  const db = await getDb();
   const nowIso = now.toISOString();
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(LEASE_TABLE)
     .update({
       leader_id: nodeId,
@@ -60,9 +58,9 @@ export async function tryRenewPollerLease(
   now: Date,
   expiresAt: Date
 ): Promise<boolean> {
-  const supabase = createAdminClient();
+  const db = await getDb();
   const nowIso = now.toISOString();
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from(LEASE_TABLE)
     .update({
       lease_expires_at: expiresAt.toISOString(),

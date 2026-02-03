@@ -52,3 +52,9 @@ error.log
 
 # openspec
 openspec/changes/
+
+# local settings
+.claude/settings.local.json
+
+# seed files with credentials
+docker/seed-*.sql
