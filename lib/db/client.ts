@@ -11,6 +11,8 @@ type AdapterFactory = () => DatabaseAdapter;
 
 let _adapter: DatabaseAdapter | null = null;
 let _adapterFactory: AdapterFactory | null = null;
+let _schemaInitialized = false;
+let _schemaInitPromise: Promise<void> | null = null;
 
 /**
  * 获取数据库提供者类型
@@ -21,6 +23,37 @@ export function getDatabaseProvider(): "postgres" | "supabase" {
     return "postgres";
   }
   return "supabase";
+}
+
+/**
+ * 确保 PostgreSQL Schema 已初始化（仅执行一次）
+ */
+async function ensureSchemaInitialized(): Promise<void> {
+  if (_schemaInitialized) return;
+
+  if (_schemaInitPromise) {
+    return _schemaInitPromise;
+  }
+
+  const provider = getDatabaseProvider();
+  if (provider !== "postgres") {
+    _schemaInitialized = true;
+    return;
+  }
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    _schemaInitialized = true;
+    return;
+  }
+
+  _schemaInitPromise = (async () => {
+    const { initPostgresSchema } = await import("./init-schema");
+    await initPostgresSchema(databaseUrl);
+    _schemaInitialized = true;
+  })();
+
+  return _schemaInitPromise;
 }
 
 /**
@@ -41,6 +74,8 @@ async function loadAdapterFactory(): Promise<AdapterFactory> {
 /**
  * 获取数据库适配器实例（单例）
  *
+ * PostgreSQL 模式下会自动初始化 Schema（仅首次调用）
+ *
  * 用法:
  * ```ts
  * const db = await getDb();
@@ -48,6 +83,9 @@ async function loadAdapterFactory(): Promise<AdapterFactory> {
  * ```
  */
 export async function getDb(): Promise<DatabaseAdapter> {
+  // 确保 Schema 已初始化（PostgreSQL 模式）
+  await ensureSchemaInitialized();
+
   if (!_adapter) {
     if (!_adapterFactory) {
       _adapterFactory = await loadAdapterFactory();
@@ -84,4 +122,6 @@ export async function initDb(): Promise<void> {
 export function resetDb(): void {
   _adapter = null;
   _adapterFactory = null;
+  _schemaInitialized = false;
+  _schemaInitPromise = null;
 }
