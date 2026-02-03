@@ -6,13 +6,35 @@
 import {historySnapshotStore} from "../database/history";
 import {loadProviderConfigsFromDB} from "../database/config-loader";
 import {runProviderChecks} from "../providers";
-import {getPollingIntervalMs} from "./polling-config";
+import {
+  getPollingIntervalMs,
+  getPollingIntervalLabel,
+  getOfficialStatusIntervalLabel,
+  getCheckConcurrency,
+} from "./polling-config";
 import {getLastPingStartedAt, getPollerTimer, setLastPingStartedAt, setPollerTimer,} from "./global-state";
 import {startOfficialStatusPoller} from "./official-status-poller";
 import {ensurePollerLeadership, isPollerLeader} from "./poller-leadership";
 import type {HealthStatus} from "../types";
+import {getDatabaseProvider} from "../db";
 
 const POLL_INTERVAL_MS = getPollingIntervalMs();
+
+/**
+ * 输出启动配置参数
+ */
+function logStartupConfig() {
+  const nodeId = process.env.CHECK_NODE_ID || process.env.HOSTNAME || "local";
+  const dbProvider = getDatabaseProvider();
+
+  console.log("[check-cx] ========== 启动配置 ==========");
+  console.log(`[check-cx]   节点 ID: ${nodeId}`);
+  console.log(`[check-cx]   数据库: ${dbProvider}`);
+  console.log(`[check-cx]   轮询间隔: ${getPollingIntervalLabel()}`);
+  console.log(`[check-cx]   状态检查间隔: ${getOfficialStatusIntervalLabel()}`);
+  console.log(`[check-cx]   最大并发数: ${getCheckConcurrency()}`);
+  console.log("[check-cx] ================================");
+}
 
 /**
  * 执行一次轮询检查
@@ -121,9 +143,10 @@ async function tick() {
 
 // 自动初始化轮询器
 if (!getPollerTimer()) {
+  logStartupConfig();
   const firstCheckAt = new Date(Date.now() + POLL_INTERVAL_MS).toISOString();
   console.log(
-    `[check-cx] 初始化后台轮询器，interval=${POLL_INTERVAL_MS}ms，首次检测预计 ${firstCheckAt}`
+    `[check-cx] 初始化后台轮询器，首次检测预计 ${firstCheckAt}`
   );
   ensurePollerLeadership().catch((error) => {
     console.error("[check-cx] 初始化主节点选举失败", error);
