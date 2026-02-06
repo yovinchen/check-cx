@@ -38,11 +38,70 @@ const DEFAULT_TIMEOUT_MS = 45_000;
 /** 性能降级阈值（毫秒）- 超过此值标记为 degraded 状态 */
 const DEGRADED_THRESHOLD_MS = 6_000;
 
-/** 需要从 metadata 中排除的字段，这些字段会与 streamText 内部参数冲突 */
-const EXCLUDED_METADATA_KEYS = new Set(["model", "prompt", "messages", "abortSignal"]);
+/** 超时时间边界（毫秒） */
+const TIMEOUT_MS_MIN = 1_000;    // 最小 1 秒
+const TIMEOUT_MS_MAX = 300_000;  // 最大 5 分钟
+
+/** 延迟阈值边界（毫秒） */
+const DEGRADED_THRESHOLD_MS_MIN = 100;     // 最小 100ms
+const DEGRADED_THRESHOLD_MS_MAX = 120_000; // 最大 2 分钟
+
+/** 需要从 metadata 中排除的字段，这些字段会与 streamText 内部参数冲突或用于内部配置 */
+const EXCLUDED_METADATA_KEYS = new Set([
+  "model",
+  "prompt",
+  "messages",
+  "abortSignal",
+  // 内部配置字段，不应传递给 API
+  "degraded_threshold_ms",
+  "timeout_ms",
+]);
 
 /** 用于从完整端点 URL 中提取 baseURL 的正则表达式 */
 const API_PATH_SUFFIX_REGEX = /\/(chat\/completions|responses|messages)\/?$/;
+
+/* ============================================================================
+ * Metadata 配置解析
+ * ============================================================================ */
+
+/**
+ * 从 metadata 中安全地读取数值配置
+ *
+ * 处理以下异常情况：
+ * - 值为 null/undefined：返回默认值
+ * - 值为字符串数字（如 "10000"）：尝试解析
+ * - 值为非有限数值（NaN/Infinity）：返回默认值
+ * - 值超出边界：返回默认值
+ *
+ * @param metadata - 配置对象
+ * @param key - 配置键名
+ * @param defaultValue - 默认值
+ * @param min - 最小值（含）
+ * @param max - 最大值（含）
+ */
+function getNumericConfig(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string,
+  defaultValue: number,
+  min: number,
+  max: number
+): number {
+  if (!metadata) return defaultValue;
+
+  const raw = metadata[key];
+  if (raw === null || raw === undefined) return defaultValue;
+
+  // 尝试转换为数字
+  const value = typeof raw === "number" ? raw : Number(raw);
+
+  // 验证是否为有限数值
+  if (!Number.isFinite(value)) return defaultValue;
+
+  // 边界检查
+  if (value < min || value > max) return defaultValue;
+
+  return value;
+}
 
 /* ============================================================================
  * URL 处理工具函数
@@ -417,15 +476,35 @@ function logCheckResult(
  * 4. 根据延迟和验证结果判定健康状态
  *
  * 状态判定规则：
- * - operational：请求成功、验证通过、延迟 ≤ 6000ms
- * - degraded：请求成功、验证通过、延迟 > 6000ms
+ * - operational：请求成功、验证通过、延迟 ≤ degraded_threshold_ms（默认 6000ms）
+ * - degraded：请求成功、验证通过、延迟 > degraded_threshold_ms
  * - validation_failed：收到回复但答案验证失败
  * - failed：请求失败、超时或回复为空
  * - error：请求过程中发生异常
+ *
+ * 自定义配置（通过 metadata 字段）：
+ * - degraded_threshold_ms：性能降级阈值（毫秒），范围 100-120000，默认 6000
+ * - timeout_ms：请求超时时间（毫秒），范围 1000-300000，默认 45000
  */
 export async function checkWithAiSdk(config: ProviderConfig): Promise<CheckResult> {
+  // 从 metadata 安全读取自定义配置，带类型检查和边界验证
+  const timeoutMs = getNumericConfig(
+    config.metadata,
+    "timeout_ms",
+    DEFAULT_TIMEOUT_MS,
+    TIMEOUT_MS_MIN,
+    TIMEOUT_MS_MAX
+  );
+  const degradedThresholdMs = getNumericConfig(
+    config.metadata,
+    "degraded_threshold_ms",
+    DEGRADED_THRESHOLD_MS,
+    DEGRADED_THRESHOLD_MS_MIN,
+    DEGRADED_THRESHOLD_MS_MAX
+  );
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const startedAt = Date.now();
 
   const displayEndpoint = config.endpoint || DEFAULT_ENDPOINTS[config.type];
@@ -497,8 +576,10 @@ export async function checkWithAiSdk(config: ProviderConfig): Promise<CheckResul
     }
 
     // 判定健康状态
-    const status: HealthStatus = latencyMs <= DEGRADED_THRESHOLD_MS ? "operational" : "degraded";
-    const message = status === "degraded" ? `响应成功但耗时 ${latencyMs}ms` : `验证通过 (${latencyMs}ms)`;
+    const status: HealthStatus = latencyMs <= degradedThresholdMs ? "operational" : "degraded";
+    const message = status === "degraded"
+      ? `响应成功但耗时 ${latencyMs}ms (阈值: ${degradedThresholdMs}ms)`
+      : `验证通过 (${latencyMs}ms)`;
 
     return buildCheckResult(params, status, latencyMs, message);
   } catch (error) {

@@ -141,6 +141,8 @@ lib/
 - **分组管理**: 通过 `group_name` 字段对配置进行分组，支持分组视图和详情页
 - **自定义请求头**: 通过配置 `request_header` 字段自定义多个请求头（JSON 格式），可绕过特定的 API 请求限制
 - **自定义请求参数**: 通过配置 `metadata` 字段（JSONB）自定义请求体参数，会合并到 API 请求中
+- **自定义延迟阈值**: 通过 `metadata.degraded_threshold_ms` 字段为每个模型设置独立的性能降级阈值（范围 100-120000ms，默认 6000ms）
+- **自定义超时时间**: 通过 `metadata.timeout_ms` 字段为每个模型设置独立的请求超时时间（范围 1000-300000ms，默认 45000ms）
 - **类型安全**: 使用 `lib/types/database.ts` 中定义的 `CheckConfigRow` 类型
 
 ### 健康检查流程
@@ -150,9 +152,9 @@ lib/
 3. **Provider 检查**: `lib/providers/ai-sdk-check.ts` 使用 Vercel AI SDK 并发执行所有配置的检查
 4. **延迟测量**: 测量首 token 延迟和端点 Ping 延迟
 5. **状态判定**:
-   - `operational`: 请求成功且延迟 ≤ 6000ms
-   - `degraded`: 请求成功但延迟 > 6000ms
-   - `failed`: 请求失败或超时（默认超时 15 秒）
+   - `operational`: 请求成功且延迟 ≤ degraded_threshold_ms（默认 6000ms，可通过 metadata 自定义）
+   - `degraded`: 请求成功但延迟 > degraded_threshold_ms
+   - `failed`: 请求失败或超时（默认超时 45 秒，可通过 metadata 自定义）
    - `maintenance`: 配置标记为维护模式
 6. **三类 Provider 支持**:
    - **OpenAI**: 支持 Chat Completions 和 Responses API
@@ -388,6 +390,16 @@ WHERE name = '主力 OpenAI';
 UPDATE check_configs
 SET metadata = '{"max_tokens": 100}'
 WHERE name = '主力 OpenAI';
+
+-- 为慢速模型设置自定义延迟阈值（10 秒）和超时时间（60 秒）
+UPDATE check_configs
+SET metadata = '{"degraded_threshold_ms": 10000, "timeout_ms": 60000}'
+WHERE name = '慢速模型';
+
+-- 同时设置 API 参数和自定义阈值
+UPDATE check_configs
+SET metadata = '{"temperature": 0.5, "degraded_threshold_ms": 8000}'
+WHERE name = '自定义模型';
 
 -- 清除自定义请求头(恢复使用默认值)
 UPDATE check_configs

@@ -73,9 +73,9 @@ lib/
 
 ### 状态判定规则
 
-- `operational`: 请求成功且延迟 ≤ 6000ms
-- `degraded`: 请求成功但延迟 > 6000ms
-- `failed`: 请求失败或超时（默认超时 15 秒）
+- `operational`: 请求成功且延迟 ≤ degraded_threshold_ms（默认 6000ms，可通过 metadata 自定义）
+- `degraded`: 请求成功但延迟 > degraded_threshold_ms
+- `failed`: 请求失败或超时（默认超时 45 秒，可通过 metadata 自定义）
 
 ### Provider 类型
 
