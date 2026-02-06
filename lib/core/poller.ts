@@ -17,6 +17,7 @@ import {startOfficialStatusPoller} from "./official-status-poller";
 import {ensurePollerLeadership, isPollerLeader} from "./poller-leadership";
 import type {HealthStatus} from "../types";
 import {getDatabaseProvider} from "../db";
+import {HISTORY_RETENTION_DAYS} from "../database/history";
 
 const POLL_INTERVAL_MS = getPollingIntervalMs();
 
@@ -33,6 +34,7 @@ function logStartupConfig() {
   console.log(`[check-cx]   轮询间隔: ${getPollingIntervalLabel()}`);
   console.log(`[check-cx]   状态检查间隔: ${getOfficialStatusIntervalLabel()}`);
   console.log(`[check-cx]   最大并发数: ${getCheckConcurrency()}`);
+  console.log(`[check-cx]   历史保留: ${HISTORY_RETENTION_DAYS} 天`);
   console.log("[check-cx] ================================");
 }
 

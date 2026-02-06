@@ -29,14 +29,24 @@ services:
     container_name: check-cx
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "8090:3000"
     environment:
-      - NODE_ENV=production
+      # 数据库配置
       - DATABASE_PROVIDER=postgres
       - DATABASE_URL=postgresql://check_cx:check_cx_password@postgres:5432/check_cx
       - DATABASE_SCHEMA=public
+      # 运行环境
+      - NODE_ENV=production
+      # 节点身份，用于多节点选主
       - CHECK_NODE_ID=docker-node-1
+      # 检测间隔（15–600 秒）
       - CHECK_POLL_INTERVAL_SECONDS=60
+      # 最大并发（1–20）
+      - CHECK_CONCURRENCY=10
+      # 官方状态轮询间隔（60–3600 秒）
+      - OFFICIAL_STATUS_CHECK_INTERVAL_SECONDS=300
+      # 历史保留天数（7–365）
+      - HISTORY_RETENTION_DAYS=30
     depends_on:
       postgres:
         condition: service_healthy
