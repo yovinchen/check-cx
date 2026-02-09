@@ -3,9 +3,9 @@
   "version": "1.20.10",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/with-port.mjs dev --turbopack",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/with-port.mjs start",
     "lint": "eslint"
   },
   "dependencies": {

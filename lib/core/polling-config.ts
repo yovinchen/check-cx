@@ -2,6 +2,10 @@ const DEFAULT_INTERVAL_SECONDS = 60;
 const MIN_INTERVAL_SECONDS = 15;
 const MAX_INTERVAL_SECONDS = 600;
 
+// 单个模型自定义轮询间隔边界（秒）
+export const PER_CONFIG_POLL_INTERVAL_MIN = 15;
+export const PER_CONFIG_POLL_INTERVAL_MAX = 3600; // 最长 1 小时
+
 // 官方状态检查默认间隔(5 分钟)
 const DEFAULT_OFFICIAL_STATUS_INTERVAL_SECONDS = 300;
 const MIN_OFFICIAL_STATUS_INTERVAL_SECONDS = 60;
@@ -76,6 +80,50 @@ export function getOfficialStatusIntervalLabel() {
     return `${minutes} 分钟`;
   }
   return `${seconds} 秒`;
+}
+
+/**
+ * 从 config metadata 中获取自定义轮询间隔（秒）
+ * 如果未设置或无效，返回 null（使用全局默认值）
+ */
+export function getConfigPollIntervalSeconds(
+  metadata: Record<string, unknown> | null | undefined
+): number | null {
+  if (!metadata) return null;
+  const raw = metadata.poll_interval_seconds;
+  if (raw === null || raw === undefined) return null;
+  const value = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(value)) return null;
+  if (value < PER_CONFIG_POLL_INTERVAL_MIN || value > PER_CONFIG_POLL_INTERVAL_MAX) return null;
+  return value;
+}
+
+/**
+ * 获取 config 的有效轮询间隔（毫秒）
+ * 优先使用 metadata 中的自定义值，否则使用全局值
+ */
+export function getEffectivePollIntervalMs(
+  metadata: Record<string, unknown> | null | undefined
+): number {
+  const custom = getConfigPollIntervalSeconds(metadata);
+  if (custom !== null) return custom * 1000;
+  return getPollingIntervalMs();
+}
+
+/**
+ * 获取 config 的有效轮询间隔的友好显示标签
+ */
+export function getEffectivePollIntervalLabel(
+  metadata: Record<string, unknown> | null | undefined
+): string {
+  const custom = getConfigPollIntervalSeconds(metadata);
+  if (custom !== null) {
+    if (custom % 60 === 0) {
+      return `${custom / 60} 分钟`;
+    }
+    return `${custom} 秒`;
+  }
+  return getPollingIntervalLabel();
 }
 
 function parseCheckConcurrency() {

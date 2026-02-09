@@ -17,6 +17,8 @@ declare global {
   var __checkCxPollerLeaderTimer: NodeJS.Timeout | undefined;
   var __checkCxPollerRole: PollerRole | undefined;
   var __CHECK_CX_PING_CACHE__: Record<string, PingCacheEntry> | undefined;
+  /** 每个 config 的上次检查完成时间戳（ms） */
+  var __CHECK_CX_CONFIG_LAST_CHECKED__: Record<string, number> | undefined;
 }
 
 /**
@@ -153,4 +155,43 @@ export function getPingCacheEntry(key: string): PingCacheEntry {
  */
 export function clearPingCache(): void {
   globalThis.__CHECK_CX_PING_CACHE__ = {};
+}
+
+/**
+ * 获取每个 config 的上次检查时间戳存储
+ */
+function getConfigLastCheckedStore(): Record<string, number> {
+  if (!globalThis.__CHECK_CX_CONFIG_LAST_CHECKED__) {
+    globalThis.__CHECK_CX_CONFIG_LAST_CHECKED__ = {};
+  }
+  return globalThis.__CHECK_CX_CONFIG_LAST_CHECKED__;
+}
+
+/**
+ * 获取指定 config 的上次检查完成时间戳（ms）
+ */
+export function getConfigLastCheckedAt(configId: string): number {
+  return getConfigLastCheckedStore()[configId] ?? 0;
+}
+
+/**
+ * 批量更新 config 的上次检查完成时间戳
+ */
+export function setConfigLastCheckedAt(configIds: string[], timestamp: number): void {
+  const store = getConfigLastCheckedStore();
+  for (const id of configIds) {
+    store[id] = timestamp;
+  }
+}
+
+/**
+ * 清除已不存在的 config 的检查时间记录
+ */
+export function pruneConfigLastChecked(activeConfigIds: Set<string>): void {
+  const store = getConfigLastCheckedStore();
+  for (const key of Object.keys(store)) {
+    if (!activeConfigIds.has(key)) {
+      delete store[key];
+    }
+  }
 }

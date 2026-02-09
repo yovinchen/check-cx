@@ -55,6 +55,7 @@ const EXCLUDED_METADATA_KEYS = new Set([
   // 内部配置字段，不应传递给 API
   "degraded_threshold_ms",
   "timeout_ms",
+  "poll_interval_seconds",
 ]);
 
 /** 用于从完整端点 URL 中提取 baseURL 的正则表达式 */
