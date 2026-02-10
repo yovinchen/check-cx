@@ -10,8 +10,7 @@ import "server-only";
 import { historySnapshotStore } from "@/lib/database/history";
 import { loadProviderConfigsFromDB } from "@/lib/database/config-loader";
 import { getAvailabilityStats } from "@/lib/database/availability";
-import type { HealthStatus, HistorySnapshot, ProviderConfig } from "@/lib/types";
-import type { AvailabilityStatsMap } from "@/lib/types";
+import type { AvailabilityStatsMap, HealthStatus, HistorySnapshot, ProviderConfig } from "@/lib/types";
 import type { MetricLine, MetricValue } from "./prometheus";
 
 /**
