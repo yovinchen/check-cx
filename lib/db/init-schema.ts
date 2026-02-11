@@ -16,6 +16,33 @@ const DB_SCHEMA =
  * @param databaseUrl PostgreSQL 连接字符串
  */
 export async function initPostgresSchema(databaseUrl: string): Promise<void> {
+  // 自动创建目标数据库（如果不存在）
+  const parsed = new URL(databaseUrl);
+  const dbName = parsed.pathname.replace(/^\//, "");
+  if (dbName && dbName !== "postgres") {
+    const maintUrl = new URL(databaseUrl);
+    maintUrl.pathname = "/postgres";
+    const maint = postgres(maintUrl.toString(), {
+      max: 1,
+      idle_timeout: 5,
+      connect_timeout: 10,
+    });
+    try {
+      const [{ exists: dbExists }] = await maint`
+        SELECT EXISTS (
+          SELECT 1 FROM pg_database WHERE datname = ${dbName}
+        )
+      `;
+      if (!dbExists) {
+        console.log(`[check-cx] 数据库 "${dbName}" 不存在，正在创建...`);
+        await maint.unsafe(`CREATE DATABASE "${dbName}"`);
+        console.log(`[check-cx] 数据库 "${dbName}" 创建成功`);
+      }
+    } finally {
+      await maint.end();
+    }
+  }
+
   const sql = postgres(databaseUrl, {
     max: 1,
     idle_timeout: 10,
