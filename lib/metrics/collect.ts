@@ -108,25 +108,25 @@ function collectProviderMetrics(
 
   return [
     {
-      name: "check_cx_provider_up",
+      name: "model_monitor_provider_up",
       help: "Provider 是否正常 (1=operational, 0=其他)",
       type: "gauge",
       values: upValues,
     },
     {
-      name: "check_cx_provider_status",
+      name: "model_monitor_provider_status",
       help: "Provider 状态枚举值 (0=operational, 1=degraded, 2=failed, 3=validation_failed, 4=maintenance, 5=error)",
       type: "gauge",
       values: statusValues,
     },
     {
-      name: "check_cx_provider_latency_ms",
+      name: "model_monitor_provider_latency_ms",
       help: "最近一次首 token 延迟 (毫秒)",
       type: "gauge",
       values: latencyValues,
     },
     {
-      name: "check_cx_provider_ping_latency_ms",
+      name: "model_monitor_provider_ping_latency_ms",
       help: "最近一次端点 Ping 延迟 (毫秒)",
       type: "gauge",
       values: pingLatencyValues,
@@ -189,7 +189,7 @@ function collectAvailabilityMetrics(
 
   return [
     {
-      name: "check_cx_provider_availability_pct",
+      name: "model_monitor_provider_availability_pct",
       help: "Provider 可用率百分比",
       type: "gauge",
       values,
