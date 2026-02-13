@@ -3,7 +3,7 @@
 # Docker 仓库配置
 DOCKER_REGISTRY='docker.antfact.com'
 DOCKER_NAMESPACE='platform'
-IMAGE_NAME='check-cx'
+IMAGE_NAME='xiaofei-model-monitor'
 
 # 目标架构
 PLATFORM='linux/amd64'

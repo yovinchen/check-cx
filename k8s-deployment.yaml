@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: xiaofei-model-monitor
+  labels:
+    app: xiaofei-model-monitor
+spec:
+  ports:
+    - name: rest-port
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app: xiaofei-model-monitor
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xiaofei-model-monitor
+  labels:
+    app: xiaofei-model-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: xiaofei-model-monitor
+  template:
+    metadata:
+      labels:
+        app: xiaofei-model-monitor
+    spec:
+      imagePullSecrets:
+        - name: antfact-secret
+      containers:
+        - name: xiaofei-model-monitor
+          image: 'docker.antfact.com/platform/xiaofei-model-monitor:latest'
+          imagePullPolicy: Always
+          env:
+            # --- 数据库配置 ---
+            - name: DATABASE_PROVIDER
+              value: "postgres"
+            - name: DATABASE_URL
+              value: "postgresql://postgres:postgres@10.20.5.38:5432/check_cx"
+            # --- 应用配置 ---
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+            - name: TZ
+              value: "Asia/Shanghai"
+            - name: CHECK_POLL_INTERVAL_SECONDS
+              value: "60"
+            - name: CHECK_NODE_ID
+              value: "k8s-node-1"
+            - name: HISTORY_RETENTION_DAYS
+              value: "30"
+            - name: OFFICIAL_STATUS_CHECK_INTERVAL_SECONDS
+              value: "60"
+            - name: CHECK_CONCURRENCY
+              value: "8"
+            # --- 管理后台 ---
+            - name: ADMIN_SECRET_KEY
+              value: "your-admin-secret-key"
+          ports:
+            - name: rest-port
+              containerPort: 3000
+          # 健康检查配置
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
