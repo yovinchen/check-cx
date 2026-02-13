@@ -1,7 +1,7 @@
 services:
-  check-cx:
-    image: bingzi233/check-cx:latest
-    container_name: check-cx
+  xiaofei-model-monitor:
+    image: bingzi233/xiaofei-model-monitor:latest
+    container_name: xiaofei-model-monitor
     restart: unless-stopped
     ports:
       - "3000:3000"
