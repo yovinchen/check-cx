@@ -27,6 +27,7 @@ interface ConfigFormData {
   api_key: string;
   enabled: boolean;
   is_maintenance: boolean;
+  use_stream: boolean;
   request_header: string;
   metadata: string;
   group_name: string;
@@ -43,6 +44,7 @@ const EMPTY_FORM: ConfigFormData = {
   api_key: "",
   enabled: true,
   is_maintenance: false,
+  use_stream: true,
   request_header: "",
   metadata: "",
   group_name: "",
@@ -77,7 +79,7 @@ export function ConfigManager({ token }: { token: string }) {
   const [batchConfig, setBatchConfig] = useState({
     endpoint: "", type: "", group_name: "", api_key: "",
     degraded_threshold_ms: "", timeout_ms: "", poll_interval_seconds: "",
-    request_header: "", metadata: "",
+    request_header: "", metadata: "", use_stream: "",
   });
 
   const fetchConfigs = useCallback(async (showLoader = true) => {
@@ -195,7 +197,7 @@ export function ConfigManager({ token }: { token: string }) {
     if (ids.length === 0) return;
 
     const directUpdate: Record<string, unknown> = {};
-    const metaPatch: Record<string, number> = {};
+    const metaPatch: Record<string, number | boolean> = {};
 
     if (batchConfig.endpoint.trim()) directUpdate.endpoint = batchConfig.endpoint.trim();
     if (batchConfig.type) directUpdate.type = batchConfig.type;
@@ -232,6 +234,11 @@ export function ConfigManager({ token }: { token: string }) {
       }
       metaPatch.poll_interval_seconds = v;
     }
+    if (batchConfig.use_stream === "true") {
+      metaPatch.use_stream = true;
+    } else if (batchConfig.use_stream === "false") {
+      metaPatch.use_stream = false;
+    }
 
     const hasDirectUpdate = Object.keys(directUpdate).length > 0;
     const hasMetaPatch = Object.keys(metaPatch).length > 0;
@@ -257,7 +264,7 @@ export function ConfigManager({ token }: { token: string }) {
 
     setSelected(new Set());
     setShowBatchConfig(false);
-    setBatchConfig({ endpoint: "", type: "", group_name: "", api_key: "", degraded_threshold_ms: "", timeout_ms: "", poll_interval_seconds: "", request_header: "", metadata: "" });
+    setBatchConfig({ endpoint: "", type: "", group_name: "", api_key: "", degraded_threshold_ms: "", timeout_ms: "", poll_interval_seconds: "", request_header: "", metadata: "", use_stream: "" });
     await fetchConfigs(false);
     setBatchLoading(false);
   };
@@ -287,15 +294,18 @@ export function ConfigManager({ token }: { token: string }) {
     const thresholdMs = meta.degraded_threshold_ms;
     const timeoutMs = meta.timeout_ms;
     const pollInterval = meta.poll_interval_seconds;
+    const useStream = meta.use_stream;
     delete meta.degraded_threshold_ms;
     delete meta.timeout_ms;
     delete meta.poll_interval_seconds;
+    delete meta.use_stream;
     const hasOtherMeta = Object.keys(meta).length > 0;
 
     setForm({
       name: config.name, type: config.type, model: config.model,
       endpoint: config.endpoint, api_key: "", enabled: config.enabled,
       is_maintenance: config.is_maintenance,
+      use_stream: useStream !== false,
       request_header: config.request_header ? JSON.stringify(config.request_header, null, 2) : "",
       metadata: hasOtherMeta ? JSON.stringify(meta, null, 2) : "",
       group_name: config.group_name || "",
@@ -347,6 +357,9 @@ export function ConfigManager({ token }: { token: string }) {
         setError("轮询间隔范围: 15 ~ 3600 秒"); setSaving(false); return;
       }
       mergedMeta.poll_interval_seconds = v;
+    }
+    if (!form.use_stream) {
+      mergedMeta.use_stream = false;
     }
     payload.metadata = Object.keys(mergedMeta).length > 0 ? mergedMeta : null;
 
@@ -569,12 +582,22 @@ export function ConfigManager({ token }: { token: string }) {
                 className="w-full px-2 py-1.5 text-sm border rounded bg-background font-mono"
                 placeholder="45000" min={1000} max={300000} step={1000} />
             </label>
-            <label className="space-y-1 col-span-2">
+            <label className="space-y-1">
               <span className="text-xs text-muted-foreground">轮询间隔 (秒, 15~3600，留空使用全局默认值)</span>
               <input type="number" value={batchConfig.poll_interval_seconds}
                 onChange={(e) => setBatchConfig((p) => ({ ...p, poll_interval_seconds: e.target.value }))}
                 className="w-full px-2 py-1.5 text-sm border rounded bg-background font-mono"
                 placeholder="60" min={15} max={3600} step={5} />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-muted-foreground">检测模式</span>
+              <select value={batchConfig.use_stream}
+                onChange={(e) => setBatchConfig((p) => ({ ...p, use_stream: e.target.value }))}
+                className="w-full px-2 py-1.5 text-sm border rounded bg-background">
+                <option value="">不修改</option>
+                <option value="true">流式 (Stream)</option>
+                <option value="false">非流式 (Sync)</option>
+              </select>
             </label>
             <label className="space-y-1 col-span-2">
               <span className="text-xs text-muted-foreground">自定义请求头 (JSON，可选)</span>
@@ -598,7 +621,7 @@ export function ConfigManager({ token }: { token: string }) {
             </button>
             <button onClick={() => {
               setShowBatchConfig(false);
-              setBatchConfig({ endpoint: "", type: "", group_name: "", api_key: "", degraded_threshold_ms: "", timeout_ms: "", poll_interval_seconds: "", request_header: "", metadata: "" });
+              setBatchConfig({ endpoint: "", type: "", group_name: "", api_key: "", degraded_threshold_ms: "", timeout_ms: "", poll_interval_seconds: "", request_header: "", metadata: "", use_stream: "" });
             }} className="px-4 py-1.5 text-sm border rounded-md hover:bg-muted transition-colors">
               取消
             </button>
@@ -635,6 +658,7 @@ export function ConfigManager({ token }: { token: string }) {
               <th className="text-left px-3 py-2 font-medium">API Key</th>
               <th className="text-center px-3 py-2 font-medium">阈值/超时</th>
               <th className="text-center px-3 py-2 font-medium">轮询间隔</th>
+              <th className="text-center px-3 py-2 font-medium">模式</th>
               <th className="text-center px-3 py-2 font-medium">启用</th>
               <th className="text-center px-3 py-2 font-medium">维护</th>
               <th className="text-right px-3 py-2 font-medium">操作</th>
@@ -660,6 +684,9 @@ export function ConfigManager({ token }: { token: string }) {
                   <PollIntervalBadge metadata={config.metadata} />
                 </td>
                 <td className="px-3 py-2 text-center">
+                  <StreamBadge metadata={config.metadata} />
+                </td>
+                <td className="px-3 py-2 text-center">
                   <ToggleSwitch on={config.enabled} color="bg-green-500" onClick={() => handleToggle(config, "enabled")} />
                 </td>
                 <td className="px-3 py-2 text-center">
@@ -673,7 +700,7 @@ export function ConfigManager({ token }: { token: string }) {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">
+                <td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">
                   {configs.length === 0 ? "暂无配置，点击「新增」添加" : "没有匹配的配置"}
                 </td>
               </tr>
@@ -710,6 +737,15 @@ function PollIntervalBadge({ metadata }: { metadata: Record<string, unknown> | n
   return (
     <span className="text-xs font-mono text-muted-foreground" title={`自定义轮询间隔: ${seconds} 秒`}>
       {label}
+    </span>
+  );
+}
+
+function StreamBadge({ metadata }: { metadata: Record<string, unknown> | null }) {
+  const isStream = metadata?.use_stream !== false;
+  return (
+    <span className={`px-1.5 py-0.5 text-xs rounded ${isStream ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"}`}>
+      {isStream ? "Stream" : "Sync"}
     </span>
   );
 }
@@ -825,6 +861,10 @@ function ConfigForm({
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.is_maintenance} onChange={(e) => onUpdate("is_maintenance", e.target.checked)} className="rounded" />
             维护模式
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.use_stream} onChange={(e) => onUpdate("use_stream", e.target.checked)} className="rounded" />
+            流式检测
           </label>
         </div>
       </div>

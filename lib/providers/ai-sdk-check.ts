@@ -18,7 +18,7 @@
  * - 端点 Ping 延迟测量
  */
 
-import { streamText } from "ai";
+import { streamText, generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
@@ -56,6 +56,7 @@ const EXCLUDED_METADATA_KEYS = new Set([
   "degraded_threshold_ms",
   "timeout_ms",
   "poll_interval_seconds",
+  "use_stream",
 ]);
 
 /** 用于从完整端点 URL 中提取 baseURL 的正则表达式 */
@@ -519,6 +520,9 @@ export async function checkWithAiSdk(config: ProviderConfig): Promise<CheckResul
     pingLatencyMs: await pingPromise,
   });
 
+  // 读取流式/非流式配置，默认启用流式
+  const useStream = config.metadata?.use_stream !== false;
+
   try {
     const { model, reasoningEffort } = createModel(config);
 
@@ -528,33 +532,50 @@ export async function checkWithAiSdk(config: ProviderConfig): Promise<CheckResul
         ? { openai: { reasoningEffort } }
         : undefined;
 
-    // 捕获流处理过程中的错误
-    let streamError: AIApiCallError | null = null;
-
-    const result = streamText({
-      model,
-      prompt: challenge.prompt,
-      abortSignal: controller.signal,
-      ...(providerOptions && { providerOptions }),
-      onError({ error }) {
-        streamError = error as AIApiCallError;
-      },
-    });
-
-    // 收集完整响应
     let collectedResponse = "";
-    for await (const chunk of result.textStream) {
-      collectedResponse += chunk;
+    let latencyMs: number;
+
+    if (useStream) {
+      // === 流式分支 ===
+      let streamError: AIApiCallError | null = null;
+
+      const result = streamText({
+        model,
+        prompt: challenge.prompt,
+        abortSignal: controller.signal,
+        ...(providerOptions && { providerOptions }),
+        onError({ error }) {
+          streamError = error as AIApiCallError;
+        },
+      });
+
+      for await (const chunk of result.textStream) {
+        collectedResponse += chunk;
+      }
+
+      latencyMs = Date.now() - startedAt;
+
+      // 检查流处理过程中是否有错误
+      if (streamError) {
+        const params = await buildParams();
+        logCheckResult(config, challenge.prompt, "", challenge.expectedAnswer, null);
+        return buildCheckResult(params, "error", latencyMs, getErrorMessage(streamError));
+      }
+    } else {
+      // === 非流式分支 ===
+      const result = await generateText({
+        model,
+        prompt: challenge.prompt,
+        abortSignal: controller.signal,
+        ...(providerOptions && { providerOptions }),
+      });
+
+      latencyMs = Date.now() - startedAt;
+      collectedResponse = result.text;
     }
 
-    const latencyMs = Date.now() - startedAt;
+    // === 共享验证逻辑 ===
     const params = await buildParams();
-
-    // 检查流处理过程中是否有错误
-    if (streamError) {
-      logCheckResult(config, challenge.prompt, "", challenge.expectedAnswer, null);
-      return buildCheckResult(params, "error", latencyMs, getErrorMessage(streamError));
-    }
 
     // 空回复
     if (!collectedResponse.trim()) {
