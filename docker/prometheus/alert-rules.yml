@@ -1,0 +1,18 @@
+groups:
+  - name: model_monitor_alert_rules
+    rules:
+      - alert: 小飞模型平台Provider离线告警
+        annotations:
+          firing_msg: '小飞模型平台: {{ $labels.group }} {{ $labels.name }}({{ $labels.model }}) 连续 10 次检测异常, 请注意！'
+          qq: 'guozhanhui,huangtiantian'
+          level: 2
+          resolved_msg: '小飞模型平台: {{ $labels.name }}({{ $labels.model }}) 已恢复在线'
+        expr: model_monitor_provider_up == 0 and model_monitor_provider_status == 2
+        for: 10m
+      - alert: 小飞模型平台首Token高延迟告警
+        annotations:
+          firing_msg: '小飞模型平台: {{ $labels.group }} {{ $labels.name }}({{ $labels.model }}) 首Token延迟达到{{ $value | humanize }}ms,超过60秒阈值, 请注意！'
+          qq: 'guozhanhui,huangtiantian'
+          resolved_msg: '小飞模型平台: {{ $labels.name }}({{ $labels.model }}) 首Token延迟已恢复正常'
+        expr: model_monitor_provider_latency_ms > 60000 and model_monitor_provider_status != 4
+        for: 10m

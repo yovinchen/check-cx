@@ -1,0 +1,693 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "title": "正常 Provider 数量",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "count(model_monitor_provider_up == 1) or vector(0)",
+          "legendFormat": "Operational",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 2,
+      "title": "异常 Provider 数量",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "count(model_monitor_provider_status == 2 or model_monitor_provider_status == 3 or model_monitor_provider_status == 5) or vector(0)",
+          "legendFormat": "Failed",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 3,
+      "title": "总 Provider 数量",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "count(model_monitor_provider_up) or vector(0)",
+          "legendFormat": "Total",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 4,
+      "title": "降级 Provider 数量",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "count(model_monitor_provider_status == 1) or vector(0)",
+          "legendFormat": "Degraded",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 5,
+      "title": "各 Provider 实时状态",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "model_monitor_provider_status",
+          "format": "table",
+          "instant": true,
+          "refId": "status"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "model_monitor_provider_latency_ms",
+          "format": "table",
+          "instant": true,
+          "refId": "latency"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "model_monitor_provider_ping_latency_ms",
+          "format": "table",
+          "instant": true,
+          "refId": "ping"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "pattern": "^(name|model|Value.*)$"
+            }
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "name": 0,
+              "model": 1,
+              "Value #status": 2,
+              "Value #latency": 3,
+              "Value #ping": 4
+            },
+            "renameByName": {
+              "name": "名称",
+              "model": "模型",
+              "Value #status": "状态",
+              "Value #latency": "延迟 (ms)",
+              "Value #ping": "Ping (ms)"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "状态" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "0": { "text": "正常", "color": "green" } } },
+                  { "type": "value", "options": { "1": { "text": "降级", "color": "yellow" } } },
+                  { "type": "value", "options": { "2": { "text": "故障", "color": "red" } } },
+                  { "type": "value", "options": { "3": { "text": "验证失败", "color": "red" } } },
+                  { "type": "value", "options": { "4": { "text": "维护中", "color": "blue" } } },
+                  { "type": "value", "options": { "5": { "text": "错误", "color": "red" } } }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-background", "mode": "basic" }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "延迟 (ms)" },
+            "properties": [
+              { "id": "unit", "value": "ms" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "yellow", "value": 3000 },
+                    { "color": "red", "value": 6000 }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-text" }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Ping (ms)" },
+            "properties": [
+              { "id": "unit", "value": "ms" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "yellow", "value": 500 },
+                    { "color": "red", "value": 1000 }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-text" }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 13,
+      "title": "异常具体模型",
+      "description": "当前处于故障/验证失败/错误状态的模型",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "(model_monitor_provider_status == 2) or (model_monitor_provider_status == 3) or (model_monitor_provider_status == 5)",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "pattern": "^(name|model|group|Value.*)$"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "name": 0,
+              "model": 1,
+              "group": 2,
+              "Value": 3
+            },
+            "renameByName": {
+              "name": "名称",
+              "model": "模型",
+              "group": "分组",
+              "Value": "状态"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "当前无异常模型",
+          "custom": { "align": "center" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "名称" },
+            "properties": [
+              { "id": "custom.align", "value": "left" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "状态" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "2": { "text": "故障", "color": "red" } } },
+                  { "type": "value", "options": { "3": { "text": "验证失败", "color": "red" } } },
+                  { "type": "value", "options": { "5": { "text": "错误", "color": "red" } } }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-background", "mode": "basic" }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 14,
+      "title": "降级具体模型",
+      "description": "当前因延迟过高处于降级状态的模型",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "model_monitor_provider_status == 1",
+          "format": "table",
+          "instant": true,
+          "refId": "status"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "model_monitor_provider_latency_ms and on(id, name, type, model, group) model_monitor_provider_status == 1",
+          "format": "table",
+          "instant": true,
+          "refId": "latency"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "pattern": "^(name|model|group|Value.*)$"
+            }
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "name": 0,
+              "model": 1,
+              "group": 2,
+              "Value #latency": 3
+            },
+            "renameByName": {
+              "name": "名称",
+              "model": "模型",
+              "group": "分组",
+              "Value #status": "状态",
+              "Value #latency": "延迟 (ms)"
+            },
+            "excludeByName": {
+              "Value #status": true
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "当前无降级模型",
+          "custom": { "align": "center" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "名称" },
+            "properties": [
+              { "id": "custom.align", "value": "left" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "延迟 (ms)" },
+            "properties": [
+              { "id": "unit", "value": "ms" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "yellow", "value": 3000 },
+                    { "color": "orange", "value": 6000 },
+                    { "color": "red", "value": 10000 }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-text" }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 11,
+      "title": "全局延迟总览",
+      "type": "timeseries",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "model_monitor_provider_latency_ms",
+          "legendFormat": "{{name}} - 首Token",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "model_monitor_provider_ping_latency_ms",
+          "legendFormat": "{{name}} - Ping",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "pointSize": 4,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "axisLabel": "延迟 (ms)",
+            "thresholdsStyle": { "mode": "dashed" }
+          },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3000 },
+              { "color": "red", "value": 6000 }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": ".*Ping$" },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "line"
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": { "fill": "dash", "dash": [10, 10] }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["lastNotNull", "mean", "max"],
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 6,
+      "title": "首 Token 延迟趋势",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
+      "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "model_monitor_provider_latency_ms",
+          "legendFormat": "{{name}} ({{model}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "axisLabel": "延迟 (ms)",
+            "thresholdsStyle": { "mode": "dashed" }
+          },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3000 },
+              { "color": "red", "value": 6000 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "mean", "max"]
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Provider 可用率总览",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 34 },
+      "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "model_monitor_provider_availability_pct{period=\"7d\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "d7"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "model_monitor_provider_availability_pct{period=\"15d\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "d15"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "nest-prometheus-server" },
+          "expr": "model_monitor_provider_availability_pct{period=\"30d\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "d30"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "pattern": "^(name|model|Value.*)$"
+            }
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "name": 0,
+              "model": 1,
+              "Value #d7": 2,
+              "Value #d15": 3,
+              "Value #d30": 4
+            },
+            "renameByName": {
+              "name": "名称",
+              "model": "模型",
+              "Value #d7": "7 天可用率",
+              "Value #d15": "15 天可用率",
+              "Value #d30": "30 天可用率"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "名称" },
+            "properties": [
+              { "id": "custom.width", "value": 200 },
+              { "id": "custom.align", "value": "left" }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*可用率" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "decimals", "value": 2 },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red", "value": null },
+                    { "color": "yellow", "value": 95 },
+                    { "color": "green", "value": 99 }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              },
+              { "id": "min", "value": 0 },
+              { "id": "max", "value": 100 }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["model-monitor"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "小飞模型状态监控",
+  "uid": "model-monitor-overview",
+  "version": 1
+}
