@@ -6,6 +6,7 @@ import "server-only";
 import { getDb } from "@/lib/db";
 import { getPollingIntervalMs } from "../core/polling-config";
 import type { CheckConfigRow, ProviderConfig, ProviderType } from "../types";
+import type { CheckRequestTemplateRow } from "../types/database";
 import { logError } from "../utils";
 
 interface ConfigCache {
@@ -17,6 +18,16 @@ interface ConfigCacheMetrics {
   hits: number;
   misses: number;
 }
+
+type JsonRecord = Record<string, unknown>;
+type TemplateProjection = Pick<
+  CheckRequestTemplateRow,
+  "id" | "type" | "request_header" | "metadata"
+>;
+type ConfigProjection = Pick<
+  CheckConfigRow,
+  "id" | "name" | "type" | "model" | "endpoint" | "api_key" | "is_maintenance" | "template_id" | "request_header" | "metadata" | "group_name"
+>;
 
 const cache: ConfigCache = {
   data: [],
@@ -35,6 +46,42 @@ export function getConfigCacheMetrics(): ConfigCacheMetrics {
 export function resetConfigCacheMetrics(): void {
   metrics.hits = 0;
   metrics.misses = 0;
+}
+
+function normalizeJsonRecord(value: unknown): JsonRecord | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as JsonRecord;
+}
+
+function mergeTemplateAndConfig(templateValue: unknown, configValue: unknown): JsonRecord | null {
+  const templateRecord = normalizeJsonRecord(templateValue);
+  const configRecord = normalizeJsonRecord(configValue);
+
+  if (!templateRecord && !configRecord) {
+    return null;
+  }
+
+  return {
+    ...(templateRecord ?? {}),
+    ...(configRecord ?? {}),
+  };
+}
+
+function getTemplate(
+  row: ConfigProjection,
+  templateMap: Map<string, TemplateProjection>
+): TemplateProjection | null {
+  if (!row.template_id) {
+    return null;
+  }
+
+  const template = templateMap.get(row.template_id);
+  if (!template || template.type !== row.type) {
+    return null;
+  }
+  return template;
 }
 
 /**
@@ -56,7 +103,9 @@ export async function loadProviderConfigsFromDB(options?: {
     const db = await getDb();
     const { data, error } = await db
       .from<CheckConfigRow>("check_configs")
-      .select("id, name, type, model, endpoint, api_key, is_maintenance, request_header, metadata, group_name")
+      .select(
+        "id, name, type, model, endpoint, api_key, is_maintenance, template_id, request_header, metadata, group_name"
+      )
       .eq("enabled", true)
       .order("id");
 
@@ -64,7 +113,6 @@ export async function loadProviderConfigsFromDB(options?: {
       logError("从数据库加载配置失败", error);
       return [];
     }
-
     if (!data || data.length === 0) {
       console.warn("[check-cx] 数据库中没有找到启用的配置");
       cache.data = [];
@@ -72,8 +120,43 @@ export async function loadProviderConfigsFromDB(options?: {
       return [];
     }
 
-    const configs: ProviderConfig[] = data.map(
-      (row: Pick<CheckConfigRow, "id" | "name" | "type" | "model" | "endpoint" | "api_key" | "is_maintenance" | "request_header" | "metadata" | "group_name">) => ({
+    const configRows = data as ConfigProjection[];
+    const templateIds = Array.from(
+      new Set(
+        configRows
+          .map((row) => row.template_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+
+    const templateMap = new Map<string, TemplateProjection>();
+    if (templateIds.length > 0) {
+      const { data: templates, error: templateError } = await db
+        .from<TemplateProjection>("check_request_templates")
+        .select("id, type, request_header, metadata")
+        .in("id", templateIds);
+
+      if (templateError) {
+        logError("从数据库加载请求模板失败", templateError);
+      } else if (templates) {
+        for (const template of templates) {
+          templateMap.set(template.id, template);
+        }
+      }
+    }
+
+    const configs: ProviderConfig[] = configRows.map((row) => {
+      const template = getTemplate(row, templateMap);
+      const mergedRequestHeaders = mergeTemplateAndConfig(
+        template?.request_header,
+        row.request_header
+      ) as Record<string, string> | null;
+      const mergedMetadata = mergeTemplateAndConfig(
+        template?.metadata,
+        row.metadata
+      );
+
+      return {
         id: row.id,
         name: row.name,
         type: row.type as ProviderType,
@@ -81,11 +164,11 @@ export async function loadProviderConfigsFromDB(options?: {
         model: row.model,
         apiKey: row.api_key,
         is_maintenance: row.is_maintenance,
-        requestHeaders: row.request_header || null,
-        metadata: row.metadata || null,
+        requestHeaders: mergedRequestHeaders,
+        metadata: mergedMetadata,
         groupName: row.group_name || null,
-      })
-    );
+      };
+    });
 
     cache.data = configs;
     cache.lastFetchedAt = now;
