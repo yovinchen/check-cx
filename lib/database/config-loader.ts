@@ -19,6 +19,12 @@ interface ConfigCacheMetrics {
   misses: number;
 }
 
+
+interface DbQueryError {
+  message?: string;
+  code?: string;
+}
+
 type JsonRecord = Record<string, unknown>;
 type TemplateProjection = Pick<
   CheckRequestTemplateRow,
@@ -39,6 +45,9 @@ const metrics: ConfigCacheMetrics = {
   misses: 0,
 };
 
+// null: 未探测，true: 支持 template_id，false: 旧库不支持
+let supportsTemplateId: boolean | null = null;
+
 export function getConfigCacheMetrics(): ConfigCacheMetrics {
   return { ...metrics };
 }
@@ -46,6 +55,15 @@ export function getConfigCacheMetrics(): ConfigCacheMetrics {
 export function resetConfigCacheMetrics(): void {
   metrics.hits = 0;
   metrics.misses = 0;
+}
+
+function isMissingTemplateIdColumn(error: DbQueryError | null): boolean {
+  if (!error) return false;
+  return (
+    error.code === "42703" &&
+    typeof error.message === "string" &&
+    error.message.includes("template_id")
+  );
 }
 
 function normalizeJsonRecord(value: unknown): JsonRecord | null {
@@ -101,16 +119,34 @@ export async function loadProviderConfigsFromDB(options?: {
     metrics.misses += 1;
 
     const db = await getDb();
-    const { data, error } = await db
+    const fullSelect =
+      "id, name, type, model, endpoint, api_key, is_maintenance, template_id, request_header, metadata, group_name";
+    const legacySelect =
+      "id, name, type, model, endpoint, api_key, is_maintenance, request_header, metadata, group_name";
+    const useLegacySelect = supportsTemplateId === false;
+
+    let { data, error } = await db
       .from<CheckConfigRow>("check_configs")
-      .select(
-        "id, name, type, model, endpoint, api_key, is_maintenance, template_id, request_header, metadata, group_name"
-      )
+      .select(useLegacySelect ? legacySelect : fullSelect)
       .eq("enabled", true)
       .order("id");
 
+    if (error && !useLegacySelect && isMissingTemplateIdColumn(error as DbQueryError)) {
+      supportsTemplateId = false;
+      console.warn("[check-cx] 检测到数据库缺少 template_id，已降级为旧配置读取模式");
+      const fallbackResult = await db
+        .from<CheckConfigRow>("check_configs")
+        .select(legacySelect)
+        .eq("enabled", true)
+        .order("id");
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    } else if (!error && !useLegacySelect) {
+      supportsTemplateId = true;
+    }
+
     if (error) {
-      logError("从数据库加载配置失败", error);
+      logError("从数据库加载配置失败", error as DbQueryError);
       return [];
     }
     if (!data || data.length === 0) {
@@ -130,7 +166,7 @@ export async function loadProviderConfigsFromDB(options?: {
     );
 
     const templateMap = new Map<string, TemplateProjection>();
-    if (templateIds.length > 0) {
+    if (supportsTemplateId !== false && templateIds.length > 0) {
       const { data: templates, error: templateError } = await db
         .from<TemplateProjection>("check_request_templates")
         .select("id, type, request_header, metadata")
